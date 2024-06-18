@@ -173,3 +173,10 @@ validation_logs/
 apex/
 *.ckpt
 .vscode/
+
+
+checkpoint/
+dataset/
+outputs/
+poses/
+
