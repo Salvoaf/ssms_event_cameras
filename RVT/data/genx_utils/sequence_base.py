@@ -49,6 +49,7 @@ class SequenceBase(MapDataPipe):
         downsample_by_factor_2: bool,
         only_load_end_labels: bool,
     ):
+        print(f"Checking if the path is a directory: {path}")
         assert sequence_length >= 1
         assert path.is_dir()
         assert dataset_type in {

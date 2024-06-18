@@ -27,8 +27,8 @@ def evaluate_detection(
     gt_boxes_list,
     dt_boxes_list,
     classes=("car", "pedestrian"),
-    height=240,
-    width=304,
+    height=180,
+    width=240,
     time_tol=50000,
     return_aps: bool = True,
 ):
@@ -165,7 +165,7 @@ def coco_eval_return_metrics(coco_eval: COCOeval):
     pass
 
 
-def _to_coco_format(gts, detections, categories, height=240, width=304):
+def _to_coco_format(gts, detections, categories, height=180, width=240):
     """
     utilitary function producing our data in a COCO usable format
     """

@@ -89,6 +89,7 @@ def draw_predictions(
     labelmap=LABELMAP_GEN4_SHORT,
 ):
     img = VizCallbackBase.ev_repr_to_img(ev_repr.cpu().numpy())
+    
     if predictions_proph is not None:
         img = draw_bboxes_bbv(
             img, predictions_proph, labelmap=labelmap, hd_resolution=hd_resolution
@@ -133,10 +134,10 @@ def gen_gt_generator(
 
 
 if __name__ == "__main__":
-    SEQUENCE_PATH = "/data/scratch1/nzubic/datasets/RVT/gen1_frequencies/gen1_40hz/test/17-04-04_11-00-13_cut_15_500000_60500000/"
-    OUT_DIR_PATH = "/data/scratch1/nzubic/out_viz/"
+    SEQUENCE_PATH = "/home/salvatore/ssms_event_cameras/RVT/gen1_frequenciesgen1_200hz/val/dynamic_translation"
+    OUT_DIR_PATH = "/home/salvatore/ssms_event_cameras/result"
     DOWNSAMPLE = False
-    EV_REPR_NAME = "stacked_histogram_dt=25_nbins=10"  # dt varies depending on different frequencies
+    EV_REPR_NAME = "stacked_histogram_ne=25000_nbins=10"  # dt varies depending on different frequencies
     DATASET_TYPE = DatasetType.GEN1
 
     seq_path = Path(SEQUENCE_PATH)

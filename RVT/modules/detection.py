@@ -1,6 +1,7 @@
 from typing import Any, Optional, Tuple, Union, Dict
 from warnings import warn
-
+import json
+import csv
 import numpy as np
 import lightning.pytorch as pl
 import torch
@@ -25,7 +26,7 @@ from .utils.detection import (
     mode_2_string,
     merge_mixed_batches,
 )
-
+import os
 
 class Module(pl.LightningModule):
     def __init__(self, full_config: DictConfig):
@@ -374,7 +375,58 @@ class Module(pl.LightningModule):
             self.mode_2_psee_evaluator[mode].add_labels(loaded_labels_proph)
             self.mode_2_psee_evaluator[mode].add_predictions(yolox_preds_proph)
 
+        # Funzione per convertire un numpy array in un dizionario
+        def numpy_to_dict(np_array, fieldnames):
+            np_array = {fieldname: value for fieldname, value in zip(fieldnames, np_array)}
+            return {
+                't': np.int64(np_array['t']),
+                'x': np.int32(np_array['x']),
+                'y': np.int32(np_array['y']),
+                'w': np.int32(np_array['w']),
+                'h': np.int32(np_array['h']),
+                'class_id': np.int32(np_array['class_id']),
+                'class_confidence': np.float32(np_array['class_confidence']),
+                'track_id': np.int32(np_array['track_id'])
+            }
+        
+        # Aggiungi i nomi dei campi delle etichette
+# Aggiungi i nomi dei campi delle etichette
+        label_fieldnames = ['t', 'x', 'y', 'w', 'h', 'class_id', 'class_confidence', 'track_id']
+
+        # Percorso del file delle etichette
+        labels_file_path = '/home/salvatore/ssms_event_cameras/poses/labels.csv'
+
+        # Salva le etichette in formato CSV
+        file_exists = os.path.isfile(labels_file_path)
+        with open(labels_file_path, 'a', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=label_fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            for label in loaded_labels_proph:
+                for dc in label:
+                    label_dict = numpy_to_dict(dc, label_fieldnames)  # Converte numpy array in dizionario
+                    writer.writerow(label_dict)  # Scrivi il dizionario direttamente
+
+        # Aggiungi i nomi dei campi delle predizioni
+        pred_fieldnames = ['t', 'x', 'y', 'w', 'h', 'class_id', 'class_confidence', 'track_id']
+
+        # Percorso del file delle predizioni
+        predictions_file_path = '/home/salvatore/ssms_event_cameras/poses/predictions.csv'
+
+        # Salva le predizioni in formato CSV
+        file_exists = os.path.isfile(predictions_file_path)
+        with open(predictions_file_path, 'a', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=pred_fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            for pred in yolox_preds_proph:
+                for dc in pred:
+                    pred_dict = numpy_to_dict(dc, pred_fieldnames)  # Converte numpy array in dizionario
+                    writer.writerow(pred_dict)
+
+
         return output
+
 
     def validation_step(self, batch: Any, batch_idx: int) -> Optional[STEP_OUTPUT]:
         return self._val_test_step_impl(batch=batch, mode=Mode.VAL)

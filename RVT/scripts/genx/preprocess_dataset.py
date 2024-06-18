@@ -56,8 +56,8 @@ split_name_2_type = {
     "test": SplitType.TEST,
 }
 
-dataset_2_height = {"gen1": 240, "gen4": 720}
-dataset_2_width = {"gen1": 304, "gen4": 1280}
+dataset_2_height = {"gen1": 180, "gen4": 720}
+dataset_2_width = {"gen1": 240, "gen4": 1280}
 
 # The following sequences would be discarded because all the labels would be removed after filtering:
 dirs_to_ignore = {
@@ -365,8 +365,34 @@ def save_labels(
         assert np.array_equal(frame_timestamps_us_existing, frame_timestamps_us)
     else:
         np.save(str(out_labels_ts_file), frame_timestamps_us)
-
-
+BBOX_DTYPE = np.dtype([
+    ('t', 'i8'),
+    ('x', 'i4'),
+    ('y', 'i4'),
+    ('w', 'i4'),
+    ('h', 'i4'),
+    ('class_id', 'i4'),
+    ('class_confidence', 'f4'),
+    ('track_id', 'i4')
+])
+def reformat_boxes(boxes):
+    """ReFormat boxes according to new rule
+    This allows to be backward-compatible with imerit annotation.
+        't' = 'ts'
+        'class_confidence' = 'confidence'
+    """
+    if "t" not in boxes.dtype.names or "class_confidence" not in boxes.dtype.names:
+        new = np.zeros((len(boxes),), dtype=BBOX_DTYPE)
+        for name in boxes.dtype.names:
+            if name == "ts":
+                new["t"] = boxes[name]
+            elif name == "confidence":
+                new["class_confidence"] = boxes[name]
+            else:
+                new[name] = boxes[name]
+        return new
+    else:
+        return boxes
 def labels_and_ev_repr_timestamps(
     npy_file: Path,
     split_type: SplitType,
@@ -386,6 +412,21 @@ def labels_and_ev_repr_timestamps(
 
     sequence_labels = np.load(str(npy_file))
     assert len(sequence_labels) > 0
+    sequence_labels = reformat_boxes(sequence_labels)
+
+    # Stampiamo alcune informazioni di debug sugli eventi
+    print("Numero totale di eventi caricati:", len(sequence_labels))
+    print("Intervallo di tempo degli eventi (us):", sequence_labels["t"].min(), "-", sequence_labels["t"].max())
+
+    if len(sequence_labels) > 0:
+        print("Esempi di timestamp degli eventi (us):", sequence_labels["t"][:10])
+
+    # Stampa il contenuto degli eventi nei primi 25 millisecondi prima del filtro
+    start_time_us = 0
+    end_time_us = 25000  # 25 ms in microsecondi
+    events_in_first_25ms = sequence_labels[(sequence_labels['t'] >= start_time_us) & (sequence_labels['t'] < end_time_us)]
+    print("Eventi nei primi 25 ms (prima del filtro):")
+    print(events_in_first_25ms)
 
     sequence_labels = apply_filters(
         labels=sequence_labels,
@@ -393,8 +434,14 @@ def labels_and_ev_repr_timestamps(
         filter_cfg=filter_cfg,
         dataset_type=dataset_type,
     )
+
     if sequence_labels.size == 0:
         raise NoLabelsException
+
+    # Stampa il contenuto degli eventi nei primi 25 millisecondi dopo il filtro
+    events_in_first_25ms_filtered = sequence_labels[(sequence_labels['t'] >= start_time_us) & (sequence_labels['t'] < end_time_us)]
+    print("Eventi nei primi 25 ms (dopo il filtro):")
+    print(events_in_first_25ms_filtered)
 
     unique_ts_us = np.unique(np.asarray(sequence_labels["t"], dtype="int64"))
 
@@ -402,10 +449,8 @@ def labels_and_ev_repr_timestamps(
         unique_label_ts_us=unique_ts_us, dataset_type=dataset_type
     )
 
-    # We extract the first label at or after align_t_us to keep it as the reference for the label extraction.
     unique_ts_idx_first = np.searchsorted(unique_ts_us, align_t_us, side="left")
 
-    # Extract "frame" timestamps from labels and prepare ev repr ts computation
     num_ev_reprs_between_frame_ts = []
     frame_timestamps_us = [unique_ts_us[unique_ts_idx_first]]
     for unique_ts_idx in range(unique_ts_idx_first + 1, len(unique_ts_us)):
@@ -416,7 +461,7 @@ def labels_and_ev_repr_timestamps(
         diff_to_ref_rounded = base_delta_count * base_delta_ts_labels_us
         if np.abs(diff_to_ref - diff_to_ref_rounded) <= 2000:
             assert base_delta_count > 0
-            # We accept up to 2 millisecond of jitter
+            # We accept up to 2 milliseconds of jitter
             frame_timestamps_us.append(ts)
             num_ev_reprs_between_frame_ts.append(
                 base_delta_count * (ts_step_frame_ms // ts_step_ev_repr_ms)
@@ -492,6 +537,7 @@ def labels_and_ev_repr_timestamps(
         ev_repr_timestamps_us_end,
         frameidx_2_repridx,
     )
+
 
 
 def write_event_data(
@@ -615,7 +661,7 @@ def write_event_representations(
     assert num_written_ev_repr == len(ev_repr_timestamps_us)
     os.rename(ev_outfile_in_progress, ev_outfile)
 
-
+'''
 def process_sequence(
     dataset: str,
     filter_cfg: DictConfig,
@@ -679,6 +725,73 @@ def process_sequence(
         frameidx2repridx=frameidx2repridx,
     )
 
+'''
+
+def process_sequence(
+    dataset: str,
+    filter_cfg: DictConfig,
+    event_representation: RepresentationBase,
+    ev_repr_num_events: Optional[int],
+    ev_repr_delta_ts_ms: Optional[int],
+    ts_step_ev_repr_ms: int,
+    downsample_by_2: bool,
+    sequence_data: Dict[DataKeys, Union[Path, SplitType]],
+):
+    in_npy_file = sequence_data.get(DataKeys.InNPY)  # Ground truth file
+    in_h5_file = sequence_data[DataKeys.InH5]  # Event data file
+    out_labels_dir = sequence_data[DataKeys.OutLabelDir]
+    out_ev_repr_dir = sequence_data[DataKeys.OutEvReprDir]
+    split_type = sequence_data[DataKeys.SplitType]
+    assert out_labels_dir.is_dir()
+    assert ts_step_ev_repr_ms > 0
+    assert bool(ev_repr_num_events is not None) ^ bool(ev_repr_delta_ts_ms is not None), f"{ev_repr_num_events=}, {ev_repr_delta_ts_ms=}"
+    
+    # 1) Extract labels and timestamps if ground truth file is provided
+    if in_npy_file and in_npy_file.exists():
+        align_t_ms = 100
+        try:
+            (
+                labels_per_frame,
+                frame_timestamps_us,
+                ev_repr_timestamps_us,
+                frameidx2repridx,
+            ) = labels_and_ev_repr_timestamps(
+                npy_file=in_npy_file,
+                split_type=split_type,
+                filter_cfg=filter_cfg,
+                align_t_ms=align_t_ms,
+                ts_step_ev_repr_ms=ts_step_ev_repr_ms,
+                dataset_type=dataset,
+            )
+        except NoLabelsException:
+            parent_dir = out_labels_dir.parent
+            print(f"No labels after filtering. Deleting {str(parent_dir)}")
+            shutil.rmtree(parent_dir)
+            return
+        # Save labels and frame timestamps
+        save_labels(
+            out_labels_dir=out_labels_dir,
+            labels_per_frame=labels_per_frame,
+            frame_timestamps_us=frame_timestamps_us,
+        )
+    else:
+        # If no ground truth file, only compute event representations
+        print("No ground truth file provided. Processing event data only.")
+        ev_repr_timestamps_us = np.array([], dtype="int64")  # Initialize as empty array
+        frameidx2repridx = np.array([], dtype="int64")  # Initialize as empty array
+
+    # 2) Retrieve event data, compute event representations and save them
+    write_event_data(
+        in_h5_file=in_h5_file,
+        ev_out_dir=out_ev_repr_dir,
+        dataset=dataset,
+        event_representation=event_representation,
+        ev_repr_num_events=ev_repr_num_events,
+        ev_repr_delta_ts_ms=ev_repr_delta_ts_ms,
+        ev_repr_timestamps_us=ev_repr_timestamps_us,
+        downsample_by_2=downsample_by_2,
+        frameidx2repridx=frameidx2repridx,
+    )
 
 class AggregationType(Enum):
     COUNT = auto()
@@ -859,18 +972,24 @@ if __name__ == "__main__":
     assert train_path.exists(), f"{train_path=}"
     assert val_path.exists(), f"{val_path=}"
     assert test_path.exists(), f"{test_path=}"
-
     seq_data_list = list()
+    print(seq_data_list)
     for split in [train_path, val_path, test_path]:
         split_out_dir = target_dir / split.name
         os.makedirs(split_out_dir, exist_ok=True)
+        
         for npy_file in split.iterdir():
             if npy_file.suffix != ".npy":
                 continue
+            print("aaaaaaaaaaaaaaaaaaaaaaaaaaa",npy_file.parent)
+            print("bbbbbbbbbbbbbbbbbbbbbbbbbbbbb",npy_file.stem.split("bbox")[0])
             h5f_path = npy_file.parent / (
                 npy_file.stem.split("bbox")[0]
                 + f"td{'.dat' if dataset == 'gen1' else ''}.h5"
             )
+            """h5f_path= '/media/salvatore/gen11/mydt/val/dynamic_translation.dat.h5'"""
+            h5f_path = Path(h5f_path)
+            print(h5f_path)
             assert h5f_path.exists(), f"{h5f_path=}"
 
             dir_name = npy_file.stem.split("_bbox")[0]
@@ -893,7 +1012,6 @@ if __name__ == "__main__":
                 DataKeys.SplitType: split_name_2_type[split.name],
             }
             seq_data_list.append(sequence_data)
-
     ev_repr_num_events = None
     ev_repr_delta_ts_ms = None
     if config.event_window_extraction.method == AggregationType.COUNT:
@@ -902,9 +1020,9 @@ if __name__ == "__main__":
         assert config.event_window_extraction.method == AggregationType.DURATION
         ev_repr_delta_ts_ms = config.event_window_extraction.value
     ts_step_ev_repr_ms = 50  # Could be an argument of the script.
-
     if num_processes > 1:
         chunksize = 1
+        
         func = partial(
             process_sequence,
             dataset,

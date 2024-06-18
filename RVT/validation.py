@@ -48,13 +48,12 @@ def main(config: DictConfig):
     # Data
     # ---------------------
     data_module = fetch_data_module(config=config)
-
+    print("ciaooooo", data_module)
     # ---------------------
     # Logging and Checkpoints
     # ---------------------
     logger = CSVLogger(save_dir="./validation_logs")
     ckpt_path = Path(config.checkpoint)
-
     # ---------------------
     # Model
     # ---------------------

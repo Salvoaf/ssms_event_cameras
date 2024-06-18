@@ -22,7 +22,7 @@ LABELMAP_GEN4 = (
 LABELMAP_GEN4_SHORT = ("pedestrian", "two wheeler", "car")
 
 
-def make_binary_histo(events, img=None, width=304, height=240):
+def make_binary_histo(events, img=None, width=240, height=180):
     """
     simple display function that shows negative events as blacks dots and positive as white one
     on a gray background
@@ -34,6 +34,7 @@ def make_binary_histo(events, img=None, width=304, height=240):
     return:
         - img numpy array, height x width x 3)
     """
+    
     if img is None:
         img = 127 * np.ones((height, width, 3), dtype=np.uint8)
     else:
