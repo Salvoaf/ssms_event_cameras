@@ -24,3 +24,6 @@ jobs:
         # Nota: In un ambiente CI, l'uso di sudo potrebbe richiedere configurazioni specifiche
         # Se sudo non funziona, potresti dover usare alternative o verificare i permessi
 
+      - name: Preprocess dataset
+        run: python /RVT/scripts/genx/preprocess_dataset.py /home/salvatore/ssms_event_cameras/dataset /home/salvatore/ssms_event_cameras/RVT/gen1_frequenciesgen1_200hz/ conf_preprocess/representation/stacked_hist.yaml conf_preprocess/extraction/const_duration.yaml conf_preprocess/filter_gen1.yaml -ds gen1 -np 20
+

@@ -83,11 +83,12 @@ def main(config: DictConfig):
     with torch.inference_mode():
         if config.use_test_set:
             trainer.test(model=module, datamodule=data_module, ckpt_path=str(ckpt_path))
+            print("test")
         else:
             trainer.validate(
                 model=module, datamodule=data_module, ckpt_path=str(ckpt_path)
             )
-
+            print("val")
 
 if __name__ == "__main__":
     main()

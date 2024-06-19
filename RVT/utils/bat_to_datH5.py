@@ -211,6 +211,7 @@ def convert_dat_to_h5(dat_file_path, h5_file_path, height, width):
 
     except Exception as e:
         print(f"Errore durante la conversione: {e}")
+
 def create_npy(npy_file, max_ts, jump,height, width):
     initial_timestamp = 13599999
     num_rows = int((max_ts - initial_timestamp)/jump)
@@ -257,5 +258,5 @@ convert_txt_to_dat(txt_file, dat_file, height, width)
 os.remove(txt_file)
 convert_dat_to_h5(dat_file, h5_file, height, width)
 os.remove(dat_file)
-create_npy(npy_file, max_ts, 250000,height, width)
+create_npy(npy_file, max_ts, 5000,height, width)
 
